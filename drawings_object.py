@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 import matplotlib.patches as mpatches
-import matplotlib.pyplot as plt
 
 def writeImage(image):
     """ store label data to colored image """

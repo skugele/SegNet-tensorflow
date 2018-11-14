@@ -7,7 +7,7 @@ import scipy
 from scipy import misc
 
 
-def get_filename_list(path, config):
+def get_filename_list(path):
     fd = open(path)
     image_filenames = []
     label_filenames = []
@@ -16,12 +16,12 @@ def get_filename_list(path, config):
         image_filenames.append(i[0])
         label_filenames.append(i[1])
 
-    image_filenames = [config["IMG_PREFIX"] + name for name in image_filenames]
-    label_filenames = [config["LABEL_PREFIX"] + name for name in label_filenames]
+    image_filenames = [name for name in image_filenames]
+    label_filenames = [name for name in label_filenames]
     return image_filenames, label_filenames
 
 
-def dataset_reader(filename_queue, config):  # prev name: CamVid_reader
+def dataset_reader(filename_queue, width, height, channels):  # prev name: CamVid_reader
 
     image_filename = filename_queue[0]  # tensor of type string
     label_filename = filename_queue[1]  # tensor of type string
@@ -35,19 +35,19 @@ def dataset_reader(filename_queue, config):  # prev name: CamVid_reader
     image_bytes = tf.image.decode_png(imageValue)
     label_bytes = tf.image.decode_png(labelValue)  # Labels are png, not jpeg
 
-    image = tf.reshape(image_bytes, (config["INPUT_HEIGHT"], config["INPUT_WIDTH"], config["INPUT_CHANNELS"]))
-    label = tf.reshape(label_bytes, (config["INPUT_HEIGHT"], config["INPUT_WIDTH"], 1))
+    image = tf.reshape(image_bytes, (height, width, channels))
+    label = tf.reshape(label_bytes, (height, width,  1))
 
     return image, label
 
 
-def dataset_inputs(image_filenames, label_filenames, batch_size, config):
+def dataset_inputs(image_filenames, label_filenames, batch_size, width, height, channels):
     images = ops.convert_to_tensor(image_filenames, dtype=dtypes.string)
     labels = ops.convert_to_tensor(label_filenames, dtype=dtypes.string)
 
     filename_queue = tf.train.slice_input_producer([images, labels], shuffle=True)
 
-    image, label = dataset_reader(filename_queue, config)
+    image, label = dataset_reader(filename_queue, width, height, channels)
     reshaped_image = tf.cast(image, tf.float32)
     min_queue_examples = 300
     print('Filling queue with %d input images before starting to train. '

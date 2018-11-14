@@ -7,7 +7,8 @@ This file is utilized to calculate the loss, accuracy, per_class_accuracy, and M
 import tensorflow as tf
 import numpy as np
 
-def cal_loss(logits, labels, number_class):
+
+def cal_loss(logits, labels, number_class=12):
     loss_weight = np.array([
         0.2595,
         0.1826,
@@ -25,7 +26,7 @@ def cal_loss(logits, labels, number_class):
     # class 0 to 11, but the class 11 is ignored, so maybe the class 11 is background!
 
     labels = tf.to_int64(labels)
-    loss, accuracy, prediction = weighted_loss(logits, labels, number_class=12, frequency=loss_weight)
+    loss, accuracy, prediction = weighted_loss(logits, labels, number_class=number_class, frequency=loss_weight)
     return loss, accuracy, prediction
 
 
@@ -143,74 +144,51 @@ def print_hist_summary(hist):
         print("    class # %d accuracy = %f " % (ii, acc))
 
 
-def train_op(total_loss, opt):
-    """
-    Input:
-    total_loss: The loss 
-    Learning_Rate: learning_rate for different optimization algorithm, for AdamOptimizer 0.001, for SGD 0.1
-    global_step: global_step is used to track how many batches had been passed. In the training process, the intial
-    value for global_step is 0 (tf.variable(0,trainable=False)), then after one batch of images passed, the loss is
-    passed into the optimizer to update the weight, then the global step increased by one. Number of batches seen
-    by the graph.. Reference: https://stackoverflow.com/questions/41166681/what-does-tensorflow-global-step-mean
-    FLAG: utilized to denote which optimization method are we using, because for segnet, we can easily use Adam, but
-    for segnet bayes, from the paper it says SGD will be more helpful to learn. 
-    Output
-    The train_op
-    """
-    global_step = tf.Variable(0, trainable=False)
+def train_op(total_loss, learning_rate):
+    global_step = tf.train.get_or_create_global_step()
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
     with tf.control_dependencies(update_ops):
-        if (opt == "ADAM"):
-            optimizer = tf.train.AdamOptimizer(0.001, epsilon=0.0001)
-            print("Running with Adam Optimizer with learning rate:", 0.001)
-        elif (opt == "SGD"):
-            base_learning_rate = 0.1
-            learning_rate = tf.train.exponential_decay(base_learning_rate, global_step, decay_steps=1000, decay_rate=0.0005)
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-            print("Running with Gradient Descent Optimizer with learning rate", 0.1)
-        else:
-            raise ValueError("Optimizer is not recognized")
-
-        grads = optimizer.compute_gradients(total_loss, var_list=tf.trainable_variables())
-        training_op = optimizer.apply_gradients(grads, global_step=global_step)
+        training_op = tf.train.AdamOptimizer(learning_rate=learning_rate,
+                                             beta1=0.5).minimize(loss=total_loss,
+                                                                 global_step=global_step,
+                                                                 var_list=tf.trainable_variables())
 
     return training_op, global_step
 
-def MAX_VOTE(pred,prob,NUM_CLASS):
-    """
-    logit: the shape should be [NUM_SAMPLES,Batch_size, image_h,image_w,NUM_CLASS]
-    pred: the shape should be[NUM_SAMPLES,NUM_PIXELS]
-    label: the real label information for each image
-    prob: the probability, the shape should be [NUM_SAMPLES,image_h,image_w,NUM_CLASS]
-    Output:
-    logit: which will feed into the Normal loss function to calculate loss and also accuracy!
-    """
 
-    image_h = 360
-    image_w = 480
-    NUM_SAMPLES = np.shape(pred)[0]
-    #transpose the prediction to be [NUM_PIXELS,NUM_SAMPLES]
-    pred_tot = np.transpose(pred)
-    prob_re = np.reshape(prob,[NUM_SAMPLES,image_h*image_w,NUM_CLASS])
-    prediction = []
-    variance_final = []
-    step = 0
-    for i in pred_tot:
-        
-        value = np.bincount(i,minlength = NUM_CLASS)
-        value_max = np.argmax(value)
-        #indices = [k for k,j in enumerate(i) if j == value_max]
-        indices = np.where(i == value_max)[0]
-        prediction.append(value_max)
-        variance_final.append(np.var(prob_re[indices,step,:],axis = 0))
-        step = step+1
-        
-     
-    return variance_final,prediction
-    
-    
-def var_calculate(pred,prob_variance):
+# def MAX_VOTE(pred, prob, NUM_CLASS):
+#     """
+#     logit: the shape should be [NUM_SAMPLES,Batch_size, image_h,image_w,NUM_CLASS]
+#     pred: the shape should be[NUM_SAMPLES,NUM_PIXELS]
+#     label: the real label information for each image
+#     prob: the probability, the shape should be [NUM_SAMPLES,image_h,image_w,NUM_CLASS]
+#     Output:
+#     logit: which will feed into the Normal loss function to calculate loss and also accuracy!
+#     """
+#
+#     image_h = 360
+#     image_w = 480
+#     NUM_SAMPLES = np.shape(pred)[0]
+#     # transpose the prediction to be [NUM_PIXELS,NUM_SAMPLES]
+#     pred_tot = np.transpose(pred)
+#     prob_re = np.reshape(prob, [NUM_SAMPLES, image_h * image_w, NUM_CLASS])
+#     prediction = []
+#     variance_final = []
+#     step = 0
+#     for i in pred_tot:
+#         value = np.bincount(i, minlength=NUM_CLASS)
+#         value_max = np.argmax(value)
+#         # indices = [k for k,j in enumerate(i) if j == value_max]
+#         indices = np.where(i == value_max)[0]
+#         prediction.append(value_max)
+#         variance_final.append(np.var(prob_re[indices, step, :], axis=0))
+#         step = step + 1
+#
+#     return variance_final, prediction
+
+
+def var_calculate(pred, prob_variance):
     """
     Inputs: 
     pred: predicted label, shape is [NUM_PIXEL,1]
@@ -218,16 +196,17 @@ def var_calculate(pred,prob_variance):
     Output:
     var_one: corresponding variance in terms of the "optimal" label
     """
-        
+
     image_h = 360
     image_w = 480
     NUM_CLASS = np.shape(prob_variance)[-1]
-    var_sep = [] #var_sep is the corresponding variance if this pixel choose label k
-    length_cur = 0 #length_cur represent how many pixels has been read for one images
-    for row in np.reshape(prob_variance,[image_h*image_w,NUM_CLASS]):
+    var_sep = []  # var_sep is the corresponding variance if this pixel choose label k
+    length_cur = 0  # length_cur represent how many pixels has been read for one images
+    for row in np.reshape(prob_variance, [image_h * image_w, NUM_CLASS]):
         temp = row[pred[length_cur]]
         length_cur += 1
         var_sep.append(temp)
-    var_one = np.reshape(var_sep,[image_h,image_w]) #var_one is the corresponding variance in terms of the "optimal" label
-    
+    var_one = np.reshape(var_sep,
+                         [image_h, image_w])  # var_one is the corresponding variance in terms of the "optimal" label
+
     return var_one
