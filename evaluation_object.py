@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 
 
-def cal_loss(logits, labels, number_class=12):
+def cal_loss(logits, labels, n_classes=12):
     loss_weight = np.array([
         0.2595,
         0.1826,
@@ -26,7 +26,7 @@ def cal_loss(logits, labels, number_class=12):
     # class 0 to 11, but the class 11 is ignored, so maybe the class 11 is background!
 
     labels = tf.to_int64(labels)
-    loss, accuracy, prediction = weighted_loss(logits, labels, number_class=number_class, frequency=loss_weight)
+    loss, accuracy, prediction = weighted_loss(logits, labels, number_class=n_classes, frequency=loss_weight)
     return loss, accuracy, prediction
 
 
@@ -78,7 +78,7 @@ def normal_loss(logits, labels, number_class):
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label_flatten, logits=logits_reshape,
                                                                    name='normal_cross_entropy')
     cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
-    tf.summary.scalar('loss', cross_entropy_mean)
+    tf.summary.scalar('mean cross entropy', cross_entropy_mean)
     correct_prediction = tf.equal(tf.argmax(logits_reshape, -1), label_flatten)
     accuracy = tf.reduce_mean(tf.to_float(correct_prediction))
     tf.summary.scalar('accuracy', accuracy)
@@ -155,58 +155,3 @@ def train_op(total_loss, learning_rate):
                                                                  var_list=tf.trainable_variables())
 
     return training_op, global_step
-
-
-# def MAX_VOTE(pred, prob, NUM_CLASS):
-#     """
-#     logit: the shape should be [NUM_SAMPLES,Batch_size, image_h,image_w,NUM_CLASS]
-#     pred: the shape should be[NUM_SAMPLES,NUM_PIXELS]
-#     label: the real label information for each image
-#     prob: the probability, the shape should be [NUM_SAMPLES,image_h,image_w,NUM_CLASS]
-#     Output:
-#     logit: which will feed into the Normal loss function to calculate loss and also accuracy!
-#     """
-#
-#     image_h = 360
-#     image_w = 480
-#     NUM_SAMPLES = np.shape(pred)[0]
-#     # transpose the prediction to be [NUM_PIXELS,NUM_SAMPLES]
-#     pred_tot = np.transpose(pred)
-#     prob_re = np.reshape(prob, [NUM_SAMPLES, image_h * image_w, NUM_CLASS])
-#     prediction = []
-#     variance_final = []
-#     step = 0
-#     for i in pred_tot:
-#         value = np.bincount(i, minlength=NUM_CLASS)
-#         value_max = np.argmax(value)
-#         # indices = [k for k,j in enumerate(i) if j == value_max]
-#         indices = np.where(i == value_max)[0]
-#         prediction.append(value_max)
-#         variance_final.append(np.var(prob_re[indices, step, :], axis=0))
-#         step = step + 1
-#
-#     return variance_final, prediction
-
-
-def var_calculate(pred, prob_variance):
-    """
-    Inputs: 
-    pred: predicted label, shape is [NUM_PIXEL,1]
-    prob_variance: the total variance for 12 classes wrt each pixel, prob_variance shape [image_h,image_w,12]
-    Output:
-    var_one: corresponding variance in terms of the "optimal" label
-    """
-
-    image_h = 360
-    image_w = 480
-    NUM_CLASS = np.shape(prob_variance)[-1]
-    var_sep = []  # var_sep is the corresponding variance if this pixel choose label k
-    length_cur = 0  # length_cur represent how many pixels has been read for one images
-    for row in np.reshape(prob_variance, [image_h * image_w, NUM_CLASS]):
-        temp = row[pred[length_cur]]
-        length_cur += 1
-        var_sep.append(temp)
-    var_one = np.reshape(var_sep,
-                         [image_h, image_w])  # var_one is the corresponding variance in terms of the "optimal" label
-
-    return var_one

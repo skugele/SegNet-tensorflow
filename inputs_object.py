@@ -5,16 +5,17 @@ import os
 import numpy as np
 import scipy
 from scipy import misc
+from PIL import Image
 
 
 def get_filename_list(path):
-    fd = open(path)
-    image_filenames = []
-    label_filenames = []
-    for i in fd:
-        i = i.strip().split(" ")
-        image_filenames.append(i[0])
-        label_filenames.append(i[1])
+    with open(path) as fd:
+        image_filenames = []
+        label_filenames = []
+        for line in fd:
+            filenames = line.strip().split(" ")
+            image_filenames.append(filenames[0])
+            label_filenames.append(filenames[1])
 
     image_filenames = [name for name in image_filenames]
     label_filenames = [name for name in label_filenames]
@@ -36,7 +37,7 @@ def dataset_reader(filename_queue, width, height, channels):  # prev name: CamVi
     label_bytes = tf.image.decode_png(labelValue)  # Labels are png, not jpeg
 
     image = tf.reshape(image_bytes, (height, width, channels))
-    label = tf.reshape(label_bytes, (height, width,  1))
+    label = tf.reshape(label_bytes, (height, width, 1))
 
     return image, label
 
@@ -98,16 +99,17 @@ def _generate_image_and_label_batch(image, label, min_queue_examples,
     return images, label_batch
 
 
-def get_all_test_data(im_list, la_list):
+def get_all_test_data(image_files, label_files):
     images = []
     labels = []
-    index = 0
-    for im_filename, la_filename in zip(im_list, la_list):
-        im = scipy.misc.imread(im_filename)
-        la = scipy.misc.imread(la_filename)
-        images.append(im)
-        labels.append(la)
-        index = index + 1
 
-    print('%d CamVid test images are loaded' % index)
+    for image_filename, label_filename in zip(image_files, label_files):
+        image = Image.open(image_filename)
+        images.append(np.array(image))
+        image.close()
+
+        label = Image.open(label_filename)
+        labels.append(np.array(label))
+        label.close()
+
     return images, labels
