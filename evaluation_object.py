@@ -7,7 +7,7 @@ This file is utilized to calculate the loss, accuracy, per_class_accuracy, and M
 import tensorflow as tf
 import numpy as np
 
-def cal_loss(logits, labels):
+def cal_loss(logits, labels, number_class):
     loss_weight = np.array([
         0.2595,
         0.1826,

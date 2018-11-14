@@ -6,9 +6,10 @@ import numpy as np
 import random
 from layers_object import conv_layer, up_sampling, max_pool, initialization, \
     variable_with_weight_decay
-from evaluation_object import cal_loss, normal_loss, per_class_acc, get_hist, print_hist_summary, train_op, MAX_VOTE, var_calculate
+from evaluation_object import cal_loss, normal_loss, per_class_acc, get_hist, print_hist_summary, train_op, MAX_VOTE, \
+    var_calculate
 from inputs_object import get_filename_list, dataset_inputs, get_all_test_data
-from drawings_object import draw_plots_bayes, draw_plots_bayes_external
+# from drawings_object import draw_plots_bayes, draw_plots_bayes_external
 from scipy import misc
 import time
 
@@ -206,7 +207,7 @@ class SegNet:
                                                                   self.config)
 
             loss, accuracy, prediction = cal_loss(logits=self.logits, labels=self.labels_pl,
-                                                     number_class=self.num_classes)
+                                                  number_class=self.num_classes)
             train, global_step = train_op(total_loss=loss, opt=self.opt)
 
             summary_op = tf.summary.merge_all()
@@ -278,9 +279,8 @@ class SegNet:
                 coord.request_stop()
                 coord.join(threads)
 
-                
-    def visual_results(self, dataset_type = "TEST", images_index = 3, FLAG_MAX_VOTE = False):
-        
+    def visual_results(self, dataset_type="TEST", images_index=3, FLAG_MAX_VOTE=False):
+
         image_w = self.config["INPUT_WIDTH"]
         image_h = self.config["INPUT_HEIGHT"]
         image_c = self.config["INPUT_CHANNELS"]
@@ -288,107 +288,107 @@ class SegNet:
         FLAG_BAYES = self.config["BAYES"]
 
         with self.sess as sess:
-            
+
             # Restore saved session
             saver = tf.train.Saver()
             saver.restore(sess, train_dir)
-            
+
             _, _, prediction = cal_loss(logits=self.logits,
                                         labels=self.labels_pl)
-            prob = tf.nn.softmax(self.logits,dim = -1)
-            
-            if (dataset_type=='TRAIN'):
+            prob = tf.nn.softmax(self.logits, dim=-1)
+
+            if (dataset_type == 'TRAIN'):
                 test_type_path = self.config["TRAIN_FILE"]
                 if type(images_index) == list:
                     indexes = images_index
                 else:
-                    indexes = random.sample(range(367),images_index)
-                #indexes = [0,75,150,225,300]
-            elif (dataset_type=='VAL'):
+                    indexes = random.sample(range(367), images_index)
+                # indexes = [0,75,150,225,300]
+            elif (dataset_type == 'VAL'):
                 test_type_path = self.config["VAL_FILE"]
                 if type(images_index) == list:
                     indexes = images_index
                 else:
-                    indexes = random.sample(range(101),images_index)
-                #indexes = [0,25,50,75,100]
-            elif (dataset_type=='TEST'):
+                    indexes = random.sample(range(101), images_index)
+                # indexes = [0,25,50,75,100]
+            elif (dataset_type == 'TEST'):
                 test_type_path = self.config["TEST_FILE"]
                 if type(images_index) == list:
                     indexes = images_index
                 else:
-                    indexes = random.sample(range(233),images_index)
-                #indexes = [0,50,100,150,200]
+                    indexes = random.sample(range(233), images_index)
+                # indexes = [0,50,100,150,200]
 
             # Load images
-            image_filename,label_filename = get_filename_list(test_type_path, self.config)
-            images, labels = get_all_test_data(image_filename,label_filename)
+            image_filename, label_filename = get_filename_list(test_type_path, self.config)
+            images, labels = get_all_test_data(image_filename, label_filename)
 
             # Keep images subset of length images_index
             images = [images[i] for i in indexes]
             labels = [labels[i] for i in indexes]
-            
+
             num_sample_generate = 30
             pred_tot = []
             var_tot = []
-            
-            for image_batch, label_batch in zip(images,labels):
-                
-                image_batch = np.reshape(image_batch,[1,image_h,image_w,image_c])
-                label_batch = np.reshape(label_batch,[1,image_h,image_w,1])
-                
+
+            for image_batch, label_batch in zip(images, labels):
+
+                image_batch = np.reshape(image_batch, [1, image_h, image_w, image_c])
+                label_batch = np.reshape(label_batch, [1, image_h, image_w, 1])
+
                 if FLAG_BAYES is False:
                     fetches = [prediction]
-                    feed_dict = {self.inputs_pl: image_batch, 
-                                 self.labels_pl: label_batch, 
-                                 self.is_training_pl: False, 
+                    feed_dict = {self.inputs_pl: image_batch,
+                                 self.labels_pl: label_batch,
+                                 self.is_training_pl: False,
                                  self.keep_prob_pl: 0.5,
                                  self.batch_size_pl: 1}
-                    pred = sess.run(fetches = fetches, feed_dict = feed_dict)
-                    pred = np.reshape(pred,[image_h,image_w])
+                    pred = sess.run(fetches=fetches, feed_dict=feed_dict)
+                    pred = np.reshape(pred, [image_h, image_w])
                     var_one = []
                 else:
-                    feed_dict = {self.inputs_pl: image_batch, 
-                                 self.labels_pl: label_batch, 
-                                 self.is_training_pl: False, 
+                    feed_dict = {self.inputs_pl: image_batch,
+                                 self.labels_pl: label_batch,
+                                 self.is_training_pl: False,
                                  self.keep_prob_pl: 0.5,
                                  self.with_dropout_pl: True,
                                  self.batch_size_pl: 1}
                     prob_iter_tot = []
                     pred_iter_tot = []
                     for iter_step in range(num_sample_generate):
-                        prob_iter_step = sess.run(fetches = [prob], feed_dict = feed_dict) 
+                        prob_iter_step = sess.run(fetches=[prob], feed_dict=feed_dict)
                         prob_iter_tot.append(prob_iter_step)
-                        pred_iter_tot.append(np.reshape(np.argmax(prob_iter_step,axis = -1),[-1]))
-                        
+                        pred_iter_tot.append(np.reshape(np.argmax(prob_iter_step, axis=-1), [-1]))
+
                     if FLAG_MAX_VOTE is True:
-                        prob_variance,pred = MAX_VOTE(pred_iter_tot,prob_iter_tot,self.config["NUM_CLASSES"])
-                        #acc_per = np.mean(np.equal(pred,np.reshape(label_batch,[-1])))
-                        var_one = var_calculate(pred,prob_variance)
-                        pred = np.reshape(pred,[image_h,image_w])
+                        prob_variance, pred = MAX_VOTE(pred_iter_tot, prob_iter_tot, self.config["NUM_CLASSES"])
+                        # acc_per = np.mean(np.equal(pred,np.reshape(label_batch,[-1])))
+                        var_one = var_calculate(pred, prob_variance)
+                        pred = np.reshape(pred, [image_h, image_w])
                     else:
-                        prob_mean = np.nanmean(prob_iter_tot,axis = 0)
-                        prob_variance = np.var(prob_iter_tot, axis = 0)
-                        pred = np.reshape(np.argmax(prob_mean,axis = -1),[-1]) #pred is the predicted label with the mean of generated samples
-                        #THIS TIME I DIDN'T INCLUDE TAU
-                        var_one = var_calculate(pred,prob_variance)
-                        pred = np.reshape(pred,[image_h,image_w])
-                        
+                        prob_mean = np.nanmean(prob_iter_tot, axis=0)
+                        prob_variance = np.var(prob_iter_tot, axis=0)
+                        pred = np.reshape(np.argmax(prob_mean, axis=-1),
+                                          [-1])  # pred is the predicted label with the mean of generated samples
+                        # THIS TIME I DIDN'T INCLUDE TAU
+                        var_one = var_calculate(pred, prob_variance)
+                        pred = np.reshape(pred, [image_h, image_w])
 
                 pred_tot.append(pred)
                 var_tot.append(var_one)
-            
-            draw_plots_bayes(images, labels, pred_tot, var_tot)
 
-    def visual_results_external_image(self, images, FLAG_MAX_VOTE = False):
-        
-        #train_dir = "./saved_models/segnet_vgg_bayes/segnet_vgg_bayes_30000/model.ckpt-30000"
-        #train_dir = "./saved_models/segnet_scratch/segnet_scratch_30000/model.ckpt-30000"
-        
-        
+            # TODO: Need to replace this
+            # draw_plots_bayes(images, labels, pred_tot, var_tot)
+
+    def visual_results_external_image(self, images, FLAG_MAX_VOTE=False):
+
+        # train_dir = "./saved_models/segnet_vgg_bayes/segnet_vgg_bayes_30000/model.ckpt-30000"
+        # train_dir = "./saved_models/segnet_scratch/segnet_scratch_30000/model.ckpt-30000"
+
         i_width = 480
         i_height = 360
         images = [misc.imresize(image, (i_height, i_width)) for image in images]
-        
+
         image_w = self.config["INPUT_WIDTH"]
         image_h = self.config["INPUT_HEIGHT"]
         image_c = self.config["INPUT_CHANNELS"]
@@ -396,83 +396,82 @@ class SegNet:
         FLAG_BAYES = self.config["BAYES"]
 
         with self.sess as sess:
-            
+
             # Restore saved session
             saver = tf.train.Saver()
             saver.restore(sess, train_dir)
-            
-            _, _, prediction = cal_loss(logits=self.logits, 
-                                           labels=self.labels_pl)
-            prob = tf.nn.softmax(self.logits,dim = -1)
-            
+
+            _, _, prediction = cal_loss(logits=self.logits,
+                                        labels=self.labels_pl)
+            prob = tf.nn.softmax(self.logits, dim=-1)
+
             num_sample_generate = 30
             pred_tot = []
             var_tot = []
-            
+
             labels = []
             for i in range(len(images)):
                 labels.append(np.array([[1 for x in range(480)] for y in range(360)]))
-            
-            
+
             inference_time = []
             start_time = time.time()
-            
-            for image_batch, label_batch in zip(images,labels):
-            #for image_batch in zip(images):
-                
-                image_batch = np.reshape(image_batch,[1,image_h,image_w,image_c])
-                label_batch = np.reshape(label_batch,[1,image_h,image_w,1])
-                
+
+            for image_batch, label_batch in zip(images, labels):
+                # for image_batch in zip(images):
+
+                image_batch = np.reshape(image_batch, [1, image_h, image_w, image_c])
+                label_batch = np.reshape(label_batch, [1, image_h, image_w, 1])
+
                 if FLAG_BAYES is False:
                     fetches = [prediction]
-                    feed_dict = {self.inputs_pl: image_batch, 
-                                 self.labels_pl: label_batch, 
-                                 self.is_training_pl: False, 
+                    feed_dict = {self.inputs_pl: image_batch,
+                                 self.labels_pl: label_batch,
+                                 self.is_training_pl: False,
                                  self.keep_prob_pl: 0.5,
                                  self.batch_size_pl: 1}
-                    pred = sess.run(fetches = fetches, feed_dict = feed_dict)
-                    pred = np.reshape(pred,[image_h,image_w])
+                    pred = sess.run(fetches=fetches, feed_dict=feed_dict)
+                    pred = np.reshape(pred, [image_h, image_w])
                     var_one = []
                 else:
-                    feed_dict = {self.inputs_pl: image_batch, 
-                                 self.labels_pl: label_batch, 
-                                 self.is_training_pl: False, 
+                    feed_dict = {self.inputs_pl: image_batch,
+                                 self.labels_pl: label_batch,
+                                 self.is_training_pl: False,
                                  self.keep_prob_pl: 0.5,
                                  self.with_dropout_pl: True,
                                  self.batch_size_pl: 1}
                     prob_iter_tot = []
                     pred_iter_tot = []
                     for iter_step in range(num_sample_generate):
-                        prob_iter_step = sess.run(fetches = [prob], feed_dict = feed_dict)
+                        prob_iter_step = sess.run(fetches=[prob], feed_dict=feed_dict)
                         prob_iter_tot.append(prob_iter_step)
-                        pred_iter_tot.append(np.reshape(np.argmax(prob_iter_step,axis = -1),[-1]))
-                        
+                        pred_iter_tot.append(np.reshape(np.argmax(prob_iter_step, axis=-1), [-1]))
+
                     if FLAG_MAX_VOTE is True:
-                        prob_variance,pred = MAX_VOTE(pred_iter_tot,prob_iter_tot,self.config["NUM_CLASSES"])
-                        #acc_per = np.mean(np.equal(pred,np.reshape(label_batch,[-1])))
-                        var_one = var_calculate(pred,prob_variance)
-                        pred = np.reshape(pred,[image_h,image_w])
+                        prob_variance, pred = MAX_VOTE(pred_iter_tot, prob_iter_tot, self.config["NUM_CLASSES"])
+                        # acc_per = np.mean(np.equal(pred,np.reshape(label_batch,[-1])))
+                        var_one = var_calculate(pred, prob_variance)
+                        pred = np.reshape(pred, [image_h, image_w])
                     else:
-                        prob_mean = np.nanmean(prob_iter_tot,axis = 0)
-                        prob_variance = np.var(prob_iter_tot, axis = 0)
-                        pred = np.reshape(np.argmax(prob_mean,axis = -1),[-1]) #pred is the predicted label with the mean of generated samples
-                        #THIS TIME I DIDN'T INCLUDE TAU
-                        var_one = var_calculate(pred,prob_variance)
-                        pred = np.reshape(pred,[image_h,image_w])
-                        
+                        prob_mean = np.nanmean(prob_iter_tot, axis=0)
+                        prob_variance = np.var(prob_iter_tot, axis=0)
+                        pred = np.reshape(np.argmax(prob_mean, axis=-1),
+                                          [-1])  # pred is the predicted label with the mean of generated samples
+                        # THIS TIME I DIDN'T INCLUDE TAU
+                        var_one = var_calculate(pred, prob_variance)
+                        pred = np.reshape(pred, [image_h, image_w])
 
                 pred_tot.append(pred)
                 var_tot.append(var_one)
                 inference_time.append(time.time() - start_time)
                 start_time = time.time()
-            
+
             try:
-                draw_plots_bayes_external(images, pred_tot, var_tot)
+                # TODO: Need to replace this
+                # draw_plots_bayes_external(images, pred_tot, var_tot)
                 return pred_tot, var_tot, inference_time
             except:
                 return pred_tot, var_tot, inference_time
-            
-           
+
     def test(self):
         image_filename, label_filename = get_filename_list(self.test_file, self.config)
 
@@ -564,7 +563,8 @@ class SegNet:
                         acc_tot.append(acc_per)
                         pred_tot.append(pred)
                         var_tot.append(var_one)
-                        print("Image Index {}: TEST Loss{:6.3f}, TEST Accu {:6.3f}".format(step, loss_tot[-1], acc_tot[-1]))
+                        print("Image Index {}: TEST Loss{:6.3f}, TEST Accu {:6.3f}".format(step, loss_tot[-1],
+                                                                                           acc_tot[-1]))
                         step = step + 1
                         per_class_acc(logit, label_batch, self.num_classes)
                         hist += get_hist(logit, label_batch)
@@ -581,7 +581,7 @@ class SegNet:
                     iu_mean_final.append(np.nanmean(iu))
 
             return acc_final, iu_final, iu_mean_final, prob_variance, logit_variance, pred_tot, var_tot
-            
+
     def save(self):
         np.save(os.path.join(self.saved_dir, "Data", "trainloss"), self.train_loss)
         np.save(os.path.join(self.saved_dir, "Data", "trainacc"), self.train_accuracy)
@@ -593,4 +593,3 @@ class SegNet:
                 checkpoint_path = os.path.join(self.saved_dir, 'model.ckpt')
                 self.saver.save(self.sess, checkpoint_path, global_step=self.model_version)
                 self.model_version += 1
-
