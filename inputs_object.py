@@ -1,10 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import dtypes
-import os
 import numpy as np
-import scipy
-from scipy import misc
 from PIL import Image
 
 
@@ -100,16 +97,13 @@ def _generate_image_and_label_batch(image, label, min_queue_examples,
 
 
 def get_all_test_data(image_files, label_files):
+    return read_images(image_files), read_images(label_files)
+
+
+def read_images(filenames):
     images = []
-    labels = []
+    for filename in filenames:
+        with Image.open(filename) as image:
+            images.append(np.array(image))
 
-    for image_filename, label_filename in zip(image_files, label_files):
-        image = Image.open(image_filename)
-        images.append(np.array(image))
-        image.close()
-
-        label = Image.open(label_filename)
-        labels.append(np.array(label))
-        label.close()
-
-    return images, labels
+    return images

@@ -323,7 +323,7 @@ class SegNet:
 
         images = [misc.imresize(image, (self.input_h, self.input_w)) for image in images]
 
-        with tf.get_default_session() as sess:
+        with tf.Session() as sess:
 
             # Restore saved session
             saver = tf.train.Saver()
