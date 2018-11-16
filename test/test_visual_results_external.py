@@ -7,9 +7,8 @@ from inputs_object import read_images
 class TestSegNet(TestCase):
     def test_visual_results_external_image(self):
         filenames = [
-            './external_images/DTU_Campus_Image1.jpg',
-            './external_images/DTU_Campus_Image2.jpg',
-            './external_images/DTU_Campus_Image3.jpg',
+            '/var/local/data/skugele/COMP8150/project/images/test/image_0000283.png',
+            '/var/local/data/skugele/COMP8150/project/images/test/image_0000019.png',
         ]
 
         images = read_images(filenames)

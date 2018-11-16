@@ -5,6 +5,6 @@ from inputs_object import read_images
 
 
 class TestSegNet(TestCase):
-    def test_visual_results(self):
+    def test_model(self):
         segnet = SegNet()
-        segnet.visual_results('TRAIN', n_samples=3)
+        segnet.test()

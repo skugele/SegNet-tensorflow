@@ -29,31 +29,14 @@ def conv_layer(bottom, name, shape, is_training, use_vgg=False, vgg_param_dict=N
     :param use_vgg:
     :param shape:
     """
-
-    def get_conv_filter(val_name):
-        return vgg_param_dict[val_name][0]
-        # so here load the weight for VGG-16, which is kernel, the kernel size for different covolution layers will show in function
-
-    def get_biases(val_name):
-        return vgg_param_dict[val_name][1]
-        # here load the bias for VGG-16, the bias size will be 64,128,256,512,512, also shown in function vgg_param_load
-
     with tf.variable_scope(name) as scope:
-        if use_vgg:
-            init = tf.constant_initializer(get_conv_filter(scope.name))
-            filt = variable_with_weight_decay('weights', initializer=init, shape=shape, wd=False)
-        else:
-            filt = variable_with_weight_decay('weights', initializer=initialization(shape[0], shape[2]),
-                                              shape=shape, wd=False)
+        filt = variable_with_weight_decay('weights', initializer=initialization(shape[0], shape[2]),
+                                          shape=shape, wd=False)
         tf.summary.histogram(scope.name + "weight", filt)
         conv = tf.nn.conv2d(bottom, filt, [1, 1, 1, 1], padding='SAME')
-        if use_vgg:
-            conv_biases_init = tf.constant_initializer(get_biases(scope.name))
-            conv_biases = variable_with_weight_decay('biases_1', initializer=conv_biases_init, shape=shape[3], wd=False)
-        else:
-            conv_biases = variable_with_weight_decay('biases', initializer=tf.constant_initializer(0.0),
-                                                     shape=shape[3],
-                                                     wd=False)
+        conv_biases = variable_with_weight_decay('biases', initializer=tf.constant_initializer(0.0),
+                                                 shape=shape[3],
+                                                 wd=False)
         tf.summary.histogram(scope.name + "bias", conv_biases)
         bias = tf.nn.bias_add(conv, conv_biases)
         conv_out = tf.nn.relu(batch_norm(bias, is_training, scope))
@@ -64,12 +47,8 @@ def batch_norm(bias_input, is_training, scope):
     with tf.variable_scope(scope.name) as scope:
         return tf.cond(is_training,
                        lambda: tf.contrib.layers.batch_norm(bias_input, is_training=True, center=False, scope=scope),
-                       lambda: tf.contrib.layers.batch_norm(bias_input, is_training=False,center=False, reuse = True, scope=scope))
-#is_training = True, it will accumulate the statistics of the movements into moving_mean and moving_variance. When it's
-#not in a training mode, then it would use the values of the moving_mean, and moving_variance.
-#shadow_variable = decay * shadow_variable + (1 - decay) * variable, shadow_variable, I think it's the accumulated moving
-#average, and then variable is the average for this specific batch of data. For the training part, we need to set is_training
-#to be True, but for the validation part, actually we should set it to be False!
+                       lambda: tf.contrib.layers.batch_norm(bias_input, is_training=False, center=False, reuse=True,
+                                                            scope=scope))
 
 
 def up_sampling(pool, ind, output_shape, batch_size, name=None):
