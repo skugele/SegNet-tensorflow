@@ -4,11 +4,18 @@ import numpy as np
 import matplotlib.patches as mpatches
 
 background = [50, 50, 50]
-cylinder = [95, 200, 200] # Cyan
-cube = [150, 100, 200] # Purple
-sphere = [200, 50, 50] # Pale Red
+cylinder = [95, 200, 200]  # Cyan
+cube = [150, 100, 200]  # Purple
+sphere = [200, 50, 50]  # Pale Red
 
-def writeImage(image):
+
+def display_image(image):
+    plt.imshow(image)
+    plt.show()
+    plt.close()
+
+
+def writeImage(image, plot=True):
     r = image.copy()
     g = image.copy()
     b = image.copy()
@@ -22,14 +29,18 @@ def writeImage(image):
     rgb[:, :, 1] = g / 1.0
     rgb[:, :, 2] = b / 1.0
     im = Image.fromarray(np.uint8(rgb))
-    plt.imshow(im)
+
+    if plot:
+        plt.imshow(im)
+    else:
+        return im
 
 
 def display_color_legend():
-    patches = [mpatches.Patch(color=np.asarray(background)/256, label='background'),
-               mpatches.Patch(color=np.asarray(cylinder)/256, label='cylinder'),
-               mpatches.Patch(color=np.asarray(cube)/256, label='cube'),
-               mpatches.Patch(color=np.asarray(sphere)/256, label='sphere'), ]
+    patches = [mpatches.Patch(color=np.asarray(background) / 256, label='background'),
+               mpatches.Patch(color=np.asarray(cylinder) / 256, label='cylinder'),
+               mpatches.Patch(color=np.asarray(cube) / 256, label='cube'),
+               mpatches.Patch(color=np.asarray(sphere) / 256, label='sphere'), ]
 
     plt.figure(figsize=(0.2, 0.2))
     plt.legend(handles=patches, ncol=4)
@@ -50,7 +61,7 @@ def draw_plots_bayes(images, labels, predicted_labels):
 
         plt.subplot(nrows, ncols, (ncols * i + 1))
         plt.imshow(images[i])
-        plt.ylabel(rows[i], size='22')
+        # plt.ylabel(rows[i], size='22')
         plt.xticks([])
         plt.yticks([])
 

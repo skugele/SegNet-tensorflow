@@ -16,7 +16,7 @@ FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('runtime_dir', 'logs/tensorboard', 'Directory where to write event logs and checkpoints.')
 # tf.app.flags.DEFINE_string('data_dir', 'SegNet/CamVid', 'Directory where to store/read data sets.')
-tf.app.flags.DEFINE_string('data_dir', '/var/local/data/skugele/COMP8150/project/images',
+tf.app.flags.DEFINE_string('data_dir', '/var/local/data/skugele/COMP8150/project/combined',
                            'Directory where to store/read data sets.')
 
 # tf.app.flags.DEFINE_string('images_prefix', 'image_plot', 'The prefix to add to sampled images files.')
@@ -27,15 +27,15 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False, 'Whether to log devic
 tf.app.flags.DEFINE_integer('log_frequency', 50, 'How often to log results to the console.')
 
 # Flags for termination criteria
-tf.app.flags.DEFINE_integer('n_epochs', 10000, 'Max number of training epochs.')
+tf.app.flags.DEFINE_integer('n_epochs', 1000000, 'Max number of training epochs.')
 
 # Flags for algorithm parameters
 tf.app.flags.DEFINE_float('learning_rate', 0.0005, 'The learning rate (eta) to be used for neural networks.')
-tf.app.flags.DEFINE_integer('batch_size', 1, 'Mini-batch size from training.')
+tf.app.flags.DEFINE_integer('batch_size', 32, 'Mini-batch size from training.')
 
 # Input dimensions
 # tf.app.flags.DEFINE_list('input_dims', [480, 360, 3], 'Dimensions of input images (width x height x channels).')
-tf.app.flags.DEFINE_list('input_dims', [160, 120, 3], 'Dimensions of input images (width x height x channels).')
+tf.app.flags.DEFINE_list('input_dims', [96, 72, 3], 'Dimensions of input images (width x height x channels).')
 # tf.app.flags.DEFINE_integer('n_classes', 12, 'The number of image classes contained in the input images.')
 tf.app.flags.DEFINE_integer('n_classes', 4, 'The number of image classes contained in the input images.')
 
@@ -198,12 +198,12 @@ class SegNet:
                 print("Iteration {}: Train Loss{:9.6f}, Train Accu {:9.6f}".format(step, self.train_loss[-1],
                                                                                    self.train_accuracy[-1]))
 
-                if step % 100 == 0:
+                if step % 25 == 0:
                     conv_classifier = mon_sess.run(self.logits, feed_dict=feed_dict)
                     print('per_class accuracy by logits in training time',
                           per_class_acc(conv_classifier, label_batch, self.n_classes))
 
-                if step % 1000 == 0:
+                if step % 100 == 0:
                     print("start validating.......")
                     _val_loss = []
                     _val_acc = []
@@ -240,14 +240,17 @@ class SegNet:
                 coord.request_stop()
                 coord.join(threads)
 
-    def visual_results(self, dataset_type="TEST", indices=None, n_samples=3):
+    def visual_results(self, dataset_type="TEST", indices=None, n_samples=3, model_file=None):
 
         with tf.Session() as sess:
 
             # Restore saved session
             saver = tf.train.Saver()
-            chkpt = tf.train.latest_checkpoint(self.saved_dir)
-            saver.restore(sess, chkpt)
+
+            if model_file is None:
+                saver.restore(sess, tf.train.latest_checkpoint(self.saved_dir))
+            else:
+                saver.restore(sess, os.path.join(self.saved_dir, model_file))
 
             _, _, prediction = cal_loss(logits=self.logits, labels=self.labels_pl, n_classes=self.n_classes)
 
@@ -288,7 +291,7 @@ class SegNet:
 
             draw_plots_bayes(images, labels, pred_tot)
 
-    def visual_results_external_image(self, images):
+    def visual_results_external_image(self, images, model_file):
 
         images = [misc.imresize(image, (self.input_h, self.input_w)) for image in images]
 
@@ -296,7 +299,11 @@ class SegNet:
 
             # Restore saved session
             saver = tf.train.Saver()
-            saver.restore(sess, tf.train.latest_checkpoint(self.saved_dir))
+
+            if model_file is None:
+                saver.restore(sess, tf.train.latest_checkpoint(self.saved_dir))
+            else:
+                saver.restore(sess, os.path.join(self.saved_dir, model_file))
 
             _, _, prediction = cal_loss(logits=self.logits,
                                         labels=self.labels_pl,
@@ -335,6 +342,30 @@ class SegNet:
                 return pred_tot, var_tot, inference_time
             except:
                 return pred_tot, var_tot, inference_time
+
+    def predict(self, images, model_file = None):
+
+        with tf.Session() as sess:
+            # Restore saved session
+            saver = tf.train.Saver()
+
+            if model_file is None:
+                saver.restore(sess, tf.train.latest_checkpoint(self.saved_dir))
+            else:
+                saver.restore(sess, os.path.join(self.saved_dir, model_file))
+
+
+            predictions = tf.reshape(tf.argmax(tf.reshape(self.logits, [-1, self.n_classes]), -1), [len(images), self.input_h, self.input_w])
+
+            image_batch = np.reshape(images, [len(images), self.input_h, self.input_w, self.input_c])
+
+            feed_dict = {self.inputs_pl: image_batch,
+                         self.is_training_pl: False,
+                         self.with_dropout_pl: False,
+                         self.batch_size_pl: len(images)}
+
+            return sess.run(predictions, feed_dict=feed_dict)
+
 
     def test(self):
         image_filename, label_filename = get_filename_list(self.test_file)
