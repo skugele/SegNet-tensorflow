@@ -139,6 +139,7 @@ def display_results(plot_set):
 
     for row in range(nrows):
 
+        # Plot image
         ax1 = fig.add_subplot(spec[row, 0])
         if row == 0:
             ax1.set_title('Image')
@@ -147,8 +148,7 @@ def display_results(plot_set):
         plt.xticks([])
         plt.yticks([])
 
-        # plt.colorbar(ticks=[0.1, 0.3, 0.5, 0.7], orientation='horizontal')
-
+        # Plot ground truth
         ax2 = fig.add_subplot(spec[row, 1], sharex=ax1)
         if row == 0:
             ax2.set_title('Ground Truth')
@@ -157,6 +157,7 @@ def display_results(plot_set):
         plt.xticks([])
         plt.yticks([])
 
+        # Plot predicted classifications
         ax3 = fig.add_subplot(spec[row, 2], sharex=ax1)
         if row == 0:
             ax3.set_title('Prediction')
@@ -165,6 +166,7 @@ def display_results(plot_set):
         plt.xticks([])
         plt.yticks([])
 
+        # Plot error map
         ax4 = fig.add_subplot(spec[row, 3], sharex=ax1)
         if row == 0:
             ax4.set_title('Error Map')
@@ -180,6 +182,7 @@ def main(argv=None):
     indices, images, labels = load_data(TEST_MANIFEST)
     segnet = SegNet()
 
+    # Make predictions loaded images using restored model
     predictions = segnet.predict(images, 'model.ckpt-4500')
 
     overall_cm = get_confusion_matrix(labels, predictions, segnet.n_classes)
