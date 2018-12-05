@@ -118,9 +118,11 @@ def get_stats_per_image(indices, images, labels, predictions, n_classes):
 
 
 def get_diff(prediction, ground_truth):
-    error_color = [200, 0, 0]
+    correct_color = [0, 200, 0] # Green
+    error_color = [200, 0, 0] # Red
+
     diff_image = np.zeros((ground_truth.shape[0], ground_truth.shape[1], 3))
-    diff_image[:, :] = [0, 200, 0]
+    diff_image[:, :] = correct_color
     diff_image[prediction != ground_truth] = error_color
 
     return Image.fromarray(np.uint8(diff_image))
