@@ -14,6 +14,7 @@ import time
 
 FLAGS = tf.app.flags.FLAGS
 
+# Flags for directory paths needed at runtime
 tf.app.flags.DEFINE_string('runtime_dir', 'logs/tensorboard', 'Directory where to write event logs and checkpoints.')
 tf.app.flags.DEFINE_string('data_dir', '/var/local/data/skugele/COMP8150/project/combined',
                            'Directory where to store/read data sets.')
@@ -47,8 +48,6 @@ class SegNet:
         self.test_file = os.path.join(FLAGS.data_dir, 'test.txt')
 
         self.input_w, self.input_h, self.input_c = FLAGS.input_dims
-        self.train_loss, self.train_accuracy = [], []
-        self.val_loss, self.val_acc = [], []
 
         self.images_tr, self.labels_tr = None, None
         self.images_val, self.labels_val = None, None
@@ -96,7 +95,6 @@ class SegNet:
         self.conv5_2 = conv_layer(self.conv5_1, "conv5_2", [3, 3, 512, 512], self.is_training_pl)
         self.conv5_3 = conv_layer(self.conv5_2, "conv5_3", [3, 3, 512, 512], self.is_training_pl)
         self.pool5, self.pool5_index, self.shape_5 = max_pool(self.conv5_3, 'pool5')
-
 
         ##################
         # SegNet Encoder #
@@ -154,7 +152,7 @@ class SegNet:
                                                               FLAGS.batch_size, self.input_w, self.input_h,
                                                               self.input_c)
 
-        loss, accuracy, prediction = cal_loss(logits=self.logits, labels=self.labels_pl, n_classes=self.n_classes)
+        loss, accuracy, predictions = cal_loss(logits=self.logits, labels=self.labels_pl, n_classes=self.n_classes)
         train, global_step = train_op(loss, FLAGS.learning_rate)
 
         tf.summary.scalar("global_step", global_step)
@@ -198,17 +196,16 @@ class SegNet:
                              self.with_dropout_pl: True,
                              self.batch_size_pl: FLAGS.batch_size}
 
-                step, _, _loss, _accuracy = mon_sess.run([global_step, train, loss, accuracy],
-                                                         feed_dict=feed_dict)
-                self.train_loss.append(_loss)
-                self.train_accuracy.append(_accuracy)
-                print("Iteration {}: Train Loss{:9.6f}, Train Accu {:9.6f}".format(step, self.train_loss[-1],
-                                                                                   self.train_accuracy[-1]))
+                step, _, training_loss, training_acc = mon_sess.run([global_step, train, loss, accuracy],
+                                                                    feed_dict=feed_dict)
+
+                print("Iteration {}: Train Loss{:9.6f}, Train Accu {:9.6f}".format(step, training_loss, training_acc))
 
                 # Check against validation set
                 if step % FLAGS.validate_frequency == 0:
-                    _val_loss = []
-                    _val_acc = []
+                    sampled_losses = []
+                    sampled_accuracies = []
+
                     hist = np.zeros((self.n_classes, self.n_classes))
 
                     for test_step in range(int(20)):
@@ -223,20 +220,19 @@ class SegNet:
                                            self.with_dropout_pl: False,
                                            self.batch_size_pl: FLAGS.batch_size}
 
-                        _loss, _acc, _val_pred = mon_sess.raw_session().run(fetches_valid, feed_dict_valid)
-                        _val_loss.append(_loss)
-                        _val_acc.append(_acc)
-                        hist += get_hist(_val_pred, label_batch_val)
+                        validate_loss, validate_acc, predictions = mon_sess.raw_session().run(fetches_valid,
+                                                                                              feed_dict_valid)
+                        sampled_losses.append(validate_loss)
+                        sampled_accuracies.append(validate_acc)
+                        hist += get_hist(predictions, label_batch_val)
 
                     print_hist_summary(hist)
 
-                    self.val_loss.append(np.mean(_val_loss))
-                    self.val_acc.append(np.mean(_val_acc))
+                    # Average loss and accuracy over n samples from validation set
+                    avg_loss = np.mean(sampled_losses)
+                    avg_acc = np.mean(sampled_accuracies)
 
-                    print(
-                        "Iteration {}: Train Loss {:9.6f}, Train Acc {:9.6f}, Val Loss {:9.6f}, Val Acc {:9.6f}".format(
-                            step, self.train_loss[-1], self.train_accuracy[-1], self.val_loss[-1],
-                            self.val_acc[-1]))
+                    print("Iteration {}: Avg Val Loss {:9.6f}, Avg Val Acc {:9.6f}".format(step, avg_loss, avg_acc))
 
                 coord.request_stop()
                 coord.join(threads)

@@ -1,16 +1,15 @@
 import collections
-import random
+
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from PIL import Image
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from matplotlib import gridspec
-
 from sklearn.metrics import confusion_matrix
-from drawings_object import writeImage, display_image, background, cylinder, cube, sphere
-from inputs_object import get_filename_list, get_all_test_data
+
 from SegNet import SegNet
+from drawings_object import writeImage
+from inputs_object import get_filename_list, get_all_test_data
 
 BACKGROUND_CATEGORY_ID = 0
 CYLINDER_CATEGORY_ID = 1
@@ -137,13 +136,12 @@ def display_results(plot_set):
     spec.update(wspace=0.05, hspace=0.05)  # set the spacing between axes.
 
     for row in range(nrows):
-        offset = row * ncols
 
         ax1 = fig.add_subplot(spec[row, 0])
         if row == 0:
             ax1.set_title('Image')
 
-        imgplot = plt.imshow(plot_set.images[row])
+        plt.imshow(plot_set.images[row])
         plt.xticks([])
         plt.yticks([])
 
@@ -153,7 +151,7 @@ def display_results(plot_set):
         if row == 0:
             ax2.set_title('Ground Truth')
 
-        imgplot = plt.imshow(plot_set.ground_truths[row])
+        plt.imshow(plot_set.ground_truths[row])
         plt.xticks([])
         plt.yticks([])
 
@@ -161,7 +159,7 @@ def display_results(plot_set):
         if row == 0:
             ax3.set_title('Prediction')
 
-        imgplot = plt.imshow(plot_set.predictions[row])
+        plt.imshow(plot_set.predictions[row])
         plt.xticks([])
         plt.yticks([])
 
@@ -169,28 +167,15 @@ def display_results(plot_set):
         if row == 0:
             ax4.set_title('Error Map')
 
-        imgplot = plt.imshow(plot_set.error_map[row])
+        plt.imshow(plot_set.error_map[row])
         plt.xticks([])
         plt.yticks([])
-
-    # plt.subplots_adjust(wspace=0, hspace=0)
-
-    # labels = ['background', 'cylinder', 'cube', 'sphere']
-    # patches = [mpatches.Patch(color=np.asarray(background) / 256),
-    #            mpatches.Patch(color=np.asarray(cylinder) / 256),
-    #            mpatches.Patch(color=np.asarray(cube) / 256),
-    #            mpatches.Patch(color=np.asarray(sphere) / 256), ]
-    #
-    # fig.legend(labels=labels, handles=patches, ncol=2, loc=2)
 
     plt.show()
 
 
 def main(argv=None):
-    n_examples = None
-    indices = None
-    # indices = [86, 87, 93, 99]
-    indices, images, labels = load_data(VALIDATE_MANIFEST, indices=indices, n=n_examples)
+    indices, images, labels = load_data(TEST_MANIFEST)
     segnet = SegNet()
 
     predictions = segnet.predict(images, 'model.ckpt-4500')
@@ -239,18 +224,6 @@ def main(argv=None):
 
     display_results(best_set)
     display_results(worst_set)
-
-    # images, ground_truths, predictions, diffs = [], [], [], []
-    # worst = sorted(stats_per_image_minus_background_only, key=lambda stats: stats.accuracy)[0:5]
-    #
-    # worst_indices = map(lambda stats: stats.index, worst)
-    #
-    #
-    # for stats in worst:
-    #     display_image(images[stats.index])
-    #     display_image(writeImage(labels[stats.index], plot=False))
-    #     display_image(writeImage(predictions[stats.index], plot=False))
-    #     display_image(get_diff(predictions[stats.index], labels[stats.index]))
 
 
 if __name__ == '__main__':
