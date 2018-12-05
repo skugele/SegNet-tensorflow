@@ -15,50 +15,41 @@ import time
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('runtime_dir', 'logs/tensorboard', 'Directory where to write event logs and checkpoints.')
-# tf.app.flags.DEFINE_string('data_dir', 'SegNet/CamVid', 'Directory where to store/read data sets.')
 tf.app.flags.DEFINE_string('data_dir', '/var/local/data/skugele/COMP8150/project/combined',
                            'Directory where to store/read data sets.')
 
-# tf.app.flags.DEFINE_string('images_prefix', 'image_plot', 'The prefix to add to sampled images files.')
-# tf.app.flags.DEFINE_string('images_file_ext', 'png', 'The file extension to use for sampled images files.')
-
 # Flags for logging
 tf.app.flags.DEFINE_boolean('log_device_placement', False, 'Whether to log device placement.')
-tf.app.flags.DEFINE_integer('log_frequency', 50, 'How often to log results to the console.')
+tf.app.flags.DEFINE_integer('summary_frequency', 50, 'How often to save summary results (used for tensorboard).')
+tf.app.flags.DEFINE_integer('checkpoint_frequency', 250, 'How often to save summary results.')
+tf.app.flags.DEFINE_integer('validate_frequency', 250, 'How often to calculate validation loss/accuracy.')
 
 # Flags for termination criteria
 tf.app.flags.DEFINE_integer('n_epochs', 1000000, 'Max number of training epochs.')
 
 # Flags for algorithm parameters
 tf.app.flags.DEFINE_float('learning_rate', 0.0005, 'The learning rate (eta) to be used for neural networks.')
-tf.app.flags.DEFINE_integer('batch_size', 32, 'Mini-batch size from training.')
+tf.app.flags.DEFINE_integer('batch_size', 32, 'Mini-batch size for training.')
 
 # Input dimensions
-# tf.app.flags.DEFINE_list('input_dims', [480, 360, 3], 'Dimensions of input images (width x height x channels).')
 tf.app.flags.DEFINE_list('input_dims', [96, 72, 3], 'Dimensions of input images (width x height x channels).')
-# tf.app.flags.DEFINE_integer('n_classes', 12, 'The number of image classes contained in the input images.')
 tf.app.flags.DEFINE_integer('n_classes', 4, 'The number of image classes contained in the input images.')
 
 
 class SegNet:
     def __init__(self):
+        # Number classes possible per pixel
         self.n_classes = FLAGS.n_classes
+
+        # Paths to dataset (training/test/validation) summary files
         self.train_file = os.path.join(FLAGS.data_dir, 'train.txt')
         self.val_file = os.path.join(FLAGS.data_dir, 'validate.txt')
         self.test_file = os.path.join(FLAGS.data_dir, 'test.txt')
-        self.img_prefix = 'image_'
-        self.label_prefix = 'label_'
-        self.saved_dir = FLAGS.runtime_dir
-        self.input_w, self.input_h, self.input_c = FLAGS.input_dims
-        self.batch_size = FLAGS.batch_size
-        self.n_epochs = FLAGS.n_epochs
-        self.learning_rate = FLAGS.learning_rate
 
+        self.input_w, self.input_h, self.input_c = FLAGS.input_dims
         self.train_loss, self.train_accuracy = [], []
         self.val_loss, self.val_acc = [], []
 
-        self.model_version = 0  # used for saving the model
-        self.saver = None
         self.images_tr, self.labels_tr = None, None
         self.images_val, self.labels_val = None, None
 
@@ -71,67 +62,74 @@ class SegNet:
         self.inputs_pl = tf.placeholder(tf.float32, [None, self.input_h, self.input_w, self.input_c])
         self.labels_pl = tf.placeholder(tf.int64, [None, self.input_h, self.input_w, 1])
 
-        # Before enter the images into the architecture, we need to do Local Contrast Normalization
-        # But it seems a bit complicated, so we use Local Response Normalization which implement in Tensorflow
-        # Reference page:https://www.tensorflow.org/api_docs/python/tf/nn/local_response_normalization
+        ##################
+        # SegNet Encoder #
+        ##################
+
+        # SegNet includes Local Contrast Normalization - Substituted for Local Response Normalization
         self.norm1 = tf.nn.lrn(self.inputs_pl, depth_radius=5, bias=1.0, alpha=0.0001, beta=0.75, name='norm1')
 
-        # first box of convolution layer,each part we do convolution two times, so we have conv1_1, and conv1_2
+        # First set of convolution layers
         self.conv1_1 = conv_layer(self.norm1, "conv1_1", [3, 3, 3, 64], self.is_training_pl)
         self.conv1_2 = conv_layer(self.conv1_1, "conv1_2", [3, 3, 64, 64], self.is_training_pl)
         self.pool1, self.pool1_index, self.shape_1 = max_pool(self.conv1_2, 'pool1')
 
-        # Second box of convolution layer(4)
+        # Second set of convolution layers
         self.conv2_1 = conv_layer(self.pool1, "conv2_1", [3, 3, 64, 128], self.is_training_pl)
         self.conv2_2 = conv_layer(self.conv2_1, "conv2_2", [3, 3, 128, 128], self.is_training_pl)
         self.pool2, self.pool2_index, self.shape_2 = max_pool(self.conv2_2, 'pool2')
 
-        # Third box of convolution layer(7)
+        # Third set of convolution layers
         self.conv3_1 = conv_layer(self.pool2, "conv3_1", [3, 3, 128, 256], self.is_training_pl)
         self.conv3_2 = conv_layer(self.conv3_1, "conv3_2", [3, 3, 256, 256], self.is_training_pl)
         self.conv3_3 = conv_layer(self.conv3_2, "conv3_3", [3, 3, 256, 256], self.is_training_pl)
         self.pool3, self.pool3_index, self.shape_3 = max_pool(self.conv3_3, 'pool3')
 
-        # Fourth box of convolution layer(10)
+        # Fourth set of convolution layers
         self.conv4_1 = conv_layer(self.pool3, "conv4_1", [3, 3, 256, 512], self.is_training_pl)
         self.conv4_2 = conv_layer(self.conv4_1, "conv4_2", [3, 3, 512, 512], self.is_training_pl)
         self.conv4_3 = conv_layer(self.conv4_2, "conv4_3", [3, 3, 512, 512], self.is_training_pl)
         self.pool4, self.pool4_index, self.shape_4 = max_pool(self.conv4_3, 'pool4')
 
-        # Fifth box of convolution layers(13)
+        # Fifth set of convolution layers
         self.conv5_1 = conv_layer(self.pool4, "conv5_1", [3, 3, 512, 512], self.is_training_pl)
         self.conv5_2 = conv_layer(self.conv5_1, "conv5_2", [3, 3, 512, 512], self.is_training_pl)
         self.conv5_3 = conv_layer(self.conv5_2, "conv5_3", [3, 3, 512, 512], self.is_training_pl)
         self.pool5, self.pool5_index, self.shape_5 = max_pool(self.conv5_3, 'pool5')
 
-        # ---------------------So Now the encoder process has been Finished--------------------------------------#
-        # ------------------Then Let's start Decoder Process-----------------------------------------------------#
 
-        # First box of deconvolution layers(3)
+        ##################
+        # SegNet Encoder #
+        ##################
+
+        # First set of deconvolution layers
         self.deconv5_1 = up_sampling(self.pool5, self.pool5_index, self.shape_5, self.batch_size_pl,
                                      name="unpool_5")
         self.deconv5_2 = conv_layer(self.deconv5_1, "deconv5_2", [3, 3, 512, 512], self.is_training_pl)
         self.deconv5_3 = conv_layer(self.deconv5_2, "deconv5_3", [3, 3, 512, 512], self.is_training_pl)
         self.deconv5_4 = conv_layer(self.deconv5_3, "deconv5_4", [3, 3, 512, 512], self.is_training_pl)
-        # Second box of deconvolution layers(6)
+
+        # Second set of deconvolution layers
         self.deconv4_1 = up_sampling(self.deconv5_4, self.pool4_index, self.shape_4, self.batch_size_pl,
                                      name="unpool_4")
         self.deconv4_2 = conv_layer(self.deconv4_1, "deconv4_2", [3, 3, 512, 512], self.is_training_pl)
         self.deconv4_3 = conv_layer(self.deconv4_2, "deconv4_3", [3, 3, 512, 512], self.is_training_pl)
         self.deconv4_4 = conv_layer(self.deconv4_3, "deconv4_4", [3, 3, 512, 256], self.is_training_pl)
 
-        # Third box of deconvolution layers(9)
+        # Third set of deconvolution layers
         self.deconv3_1 = up_sampling(self.deconv4_4, self.pool3_index, self.shape_3, self.batch_size_pl,
                                      name="unpool_3")
         self.deconv3_2 = conv_layer(self.deconv3_1, "deconv3_2", [3, 3, 256, 256], self.is_training_pl)
         self.deconv3_3 = conv_layer(self.deconv3_2, "deconv3_3", [3, 3, 256, 256], self.is_training_pl)
         self.deconv3_4 = conv_layer(self.deconv3_3, "deconv3_4", [3, 3, 256, 128], self.is_training_pl)
-        # Fourth box of deconvolution layers(11)
+
+        # Fourth set of deconvolution layers
         self.deconv2_1 = up_sampling(self.deconv3_4, self.pool2_index, self.shape_2, self.batch_size_pl,
                                      name="unpool_2")
         self.deconv2_2 = conv_layer(self.deconv2_1, "deconv2_2", [3, 3, 128, 128], self.is_training_pl)
         self.deconv2_3 = conv_layer(self.deconv2_2, "deconv2_3", [3, 3, 128, 64], self.is_training_pl)
-        # Fifth box of deconvolution layers(13)
+
+        # Fifth set of deconvolution layers
         self.deconv1_1 = up_sampling(self.deconv2_3, self.pool1_index, self.shape_1, self.batch_size_pl,
                                      name="unpool_1")
         self.deconv1_2 = conv_layer(self.deconv1_1, "deconv1_2", [3, 3, 64, 64], self.is_training_pl)
@@ -150,30 +148,39 @@ class SegNet:
         val_image_filename, val_label_filename = get_filename_list(self.val_file)
 
         if self.images_tr is None:
-            self.images_tr, self.labels_tr = dataset_inputs(image_filename, label_filename, self.batch_size,
+            self.images_tr, self.labels_tr = dataset_inputs(image_filename, label_filename, FLAGS.batch_size,
                                                             self.input_w, self.input_h, self.input_c)
             self.images_val, self.labels_val = dataset_inputs(val_image_filename, val_label_filename,
-                                                              self.batch_size, self.input_w, self.input_h,
+                                                              FLAGS.batch_size, self.input_w, self.input_h,
                                                               self.input_c)
 
         loss, accuracy, prediction = cal_loss(logits=self.logits, labels=self.labels_pl, n_classes=self.n_classes)
-        train, global_step = train_op(loss, self.learning_rate)
+        train, global_step = train_op(loss, FLAGS.learning_rate)
 
         tf.summary.scalar("global_step", global_step)
         tf.summary.scalar("total loss", loss)
 
+        # Calculate total number of trainable parameters
+        total_parameters = 0
+        for variable in tf.trainable_variables():
+            shape = variable.get_shape()
+            variable_parameters = 1
+            for dim in shape:
+                variable_parameters *= dim.value
+            total_parameters += variable_parameters
+        print('Total Trainable Parameters: ', total_parameters)
+
         with tf.train.SingularMonitoredSession(
                 # save/load model state
-                checkpoint_dir=self.saved_dir,
-                hooks=[tf.train.StopAtStepHook(last_step=self.n_epochs),
-                       # tf.train.NanTensorHook(self.train_loss),
+                checkpoint_dir=FLAGS.runtime_dir,
+                hooks=[tf.train.StopAtStepHook(last_step=FLAGS.n_epochs),
                        tf.train.CheckpointSaverHook(
-                           checkpoint_dir=self.saved_dir,
-                           save_steps=250,
+                           checkpoint_dir=FLAGS.runtime_dir,
+                           save_steps=FLAGS.checkpoint_frequency,
                            saver=tf.train.Saver()),
                        tf.train.SummarySaverHook(
-                           save_steps=50,
-                           output_dir=self.saved_dir,
+                           save_steps=FLAGS.summary_frequency,
+                           output_dir=FLAGS.runtime_dir,
                            scaffold=tf.train.Scaffold(summary_op=tf.summary.merge_all()),
                        )],
                 config=tf.ConfigProto(log_device_placement=True)) as mon_sess:
@@ -189,7 +196,7 @@ class SegNet:
                              self.is_training_pl: True,
                              self.keep_prob_pl: 0.5,
                              self.with_dropout_pl: True,
-                             self.batch_size_pl: self.batch_size}
+                             self.batch_size_pl: FLAGS.batch_size}
 
                 step, _, _loss, _accuracy = mon_sess.run([global_step, train, loss, accuracy],
                                                          feed_dict=feed_dict)
@@ -198,16 +205,12 @@ class SegNet:
                 print("Iteration {}: Train Loss{:9.6f}, Train Accu {:9.6f}".format(step, self.train_loss[-1],
                                                                                    self.train_accuracy[-1]))
 
-                if step % 25 == 0:
-                    conv_classifier = mon_sess.run(self.logits, feed_dict=feed_dict)
-                    print('per_class accuracy by logits in training time',
-                          per_class_acc(conv_classifier, label_batch, self.n_classes))
-
-                if step % 100 == 0:
-                    print("start validating.......")
+                # Check against validation set
+                if step % FLAGS.validate_frequency == 0:
                     _val_loss = []
                     _val_acc = []
                     hist = np.zeros((self.n_classes, self.n_classes))
+
                     for test_step in range(int(20)):
                         fetches_valid = [loss, accuracy, self.logits]
                         image_batch_val, label_batch_val = mon_sess.raw_session().run(
@@ -218,10 +221,8 @@ class SegNet:
                                            self.is_training_pl: True,
                                            self.keep_prob_pl: 1.0,
                                            self.with_dropout_pl: False,
-                                           self.batch_size_pl: self.batch_size}
-                        # since we still using mini-batch, so in the batch norm we set phase_train to be
-                        # true, and because we didin't run the trainop process, so it will not update
-                        # the weight!
+                                           self.batch_size_pl: FLAGS.batch_size}
+
                         _loss, _acc, _val_pred = mon_sess.raw_session().run(fetches_valid, feed_dict_valid)
                         _val_loss.append(_loss)
                         _val_acc.append(_acc)
@@ -248,9 +249,9 @@ class SegNet:
             saver = tf.train.Saver()
 
             if model_file is None:
-                saver.restore(sess, tf.train.latest_checkpoint(self.saved_dir))
+                saver.restore(sess, tf.train.latest_checkpoint(FLAGS.runtime_dir))
             else:
-                saver.restore(sess, os.path.join(self.saved_dir, model_file))
+                saver.restore(sess, os.path.join(FLAGS.runtime_dir, model_file))
 
             _, _, prediction = cal_loss(logits=self.logits, labels=self.labels_pl, n_classes=self.n_classes)
 
@@ -301,9 +302,9 @@ class SegNet:
             saver = tf.train.Saver()
 
             if model_file is None:
-                saver.restore(sess, tf.train.latest_checkpoint(self.saved_dir))
+                saver.restore(sess, tf.train.latest_checkpoint(FLAGS.runtime_dir))
             else:
-                saver.restore(sess, os.path.join(self.saved_dir, model_file))
+                saver.restore(sess, os.path.join(FLAGS.runtime_dir, model_file))
 
             _, _, prediction = cal_loss(logits=self.logits,
                                         labels=self.labels_pl,
@@ -343,19 +344,19 @@ class SegNet:
             except:
                 return pred_tot, var_tot, inference_time
 
-    def predict(self, images, model_file = None):
+    def predict(self, images, model_file=None):
 
         with tf.Session() as sess:
             # Restore saved session
             saver = tf.train.Saver()
 
             if model_file is None:
-                saver.restore(sess, tf.train.latest_checkpoint(self.saved_dir))
+                saver.restore(sess, tf.train.latest_checkpoint(FLAGS.runtime_dir))
             else:
-                saver.restore(sess, os.path.join(self.saved_dir, model_file))
+                saver.restore(sess, os.path.join(FLAGS.runtime_dir, model_file))
 
-
-            predictions = tf.reshape(tf.argmax(tf.reshape(self.logits, [-1, self.n_classes]), -1), [len(images), self.input_h, self.input_w])
+            predictions = tf.reshape(tf.argmax(tf.reshape(self.logits, [-1, self.n_classes]), -1),
+                                     [len(images), self.input_h, self.input_w])
 
             image_batch = np.reshape(images, [len(images), self.input_h, self.input_w, self.input_c])
 
@@ -366,14 +367,13 @@ class SegNet:
 
             return sess.run(predictions, feed_dict=feed_dict)
 
-
     def test(self):
         image_filename, label_filename = get_filename_list(self.test_file)
 
         with tf.Session() as sess:
             # Restore saved session
             saver = tf.train.Saver()
-            saver.restore(sess, tf.train.latest_checkpoint(self.saved_dir))
+            saver.restore(sess, tf.train.latest_checkpoint(FLAGS.runtime_dir))
 
             loss, accuracy, prediction = normal_loss(self.logits, self.labels_pl, self.n_classes)
 
