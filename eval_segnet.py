@@ -209,6 +209,7 @@ def main(argv=None):
 
     PlotSet = collections.namedtuple('PlotSet', ['size', 'images', 'ground_truths', 'predictions', 'error_map'])
 
+    # Plot images with best accuracies
     best = sorted(stats_per_multi_object_images, key=lambda stats: stats.accuracy, reverse=True)[0:5]
     best_set = PlotSet(len(best), [], [], [], [])
 
@@ -218,6 +219,7 @@ def main(argv=None):
         best_set.predictions.append(writeImage(predictions[index], plot=False))
         best_set.error_map.append(get_diff(predictions[index], labels[index]))
 
+    # Plot images with worst accuracies
     worst = sorted(stats_per_image_minus_background_only, key=lambda stats: stats.accuracy)[0:5]
     worst_set = PlotSet(len(worst), [], [], [], [])
 
