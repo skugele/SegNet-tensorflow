@@ -97,7 +97,7 @@ class SegNet:
         self.pool5, self.pool5_index, self.shape_5 = max_pool(self.conv5_3, 'pool5')
 
         ##################
-        # SegNet Encoder #
+        # SegNet Decoder #
         ##################
 
         # First set of deconvolution layers

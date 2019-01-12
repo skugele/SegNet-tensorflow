@@ -17,23 +17,19 @@ def max_pool(inputs, name):
     # https://www.tensorflow.org/versions/r1.0/api_docs/python/tf/nn/max_pool_with_argmax
 
 
-def conv_layer(bottom, name, shape, is_training, use_vgg=False, vgg_param_dict=None):
+def conv_layer(input_layer, name, shape, is_training):
     """
     Inputs:
-    bottom: The input image or tensor
+    input_layer: The input image or tensor
     name: corresponding layer's name
     shape: the shape of kernel size
-    training_state: represent if the weight should update 
-    Output:
-    The output from layers
-    :param use_vgg:
-    :param shape:
+    is_training: represent if the weight should update
     """
     with tf.variable_scope(name) as scope:
-        filt = variable_with_weight_decay('weights', initializer=initialization(shape[0], shape[2]),
+        filter = variable_with_weight_decay('weights', initializer=initialization(shape[0], shape[2]),
                                           shape=shape, wd=False)
-        tf.summary.histogram(scope.name + "weight", filt)
-        conv = tf.nn.conv2d(bottom, filt, [1, 1, 1, 1], padding='SAME')
+        tf.summary.histogram(scope.name + "weight", filter)
+        conv = tf.nn.conv2d(input_layer, filter, [1, 1, 1, 1], padding='SAME')
         conv_biases = variable_with_weight_decay('biases', initializer=tf.constant_initializer(0.0),
                                                  shape=shape[3],
                                                  wd=False)
