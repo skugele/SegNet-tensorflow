@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Nov 21 16:12:45 2017
-This file is utilized to calculate the loss, accuracy, per_class_accuracy, and MOI(mean of intersection)
-
-"""
 import tensorflow as tf
 import numpy as np
 

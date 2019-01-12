@@ -1,20 +1,13 @@
-"""
-Created on Tue Nov 21 10:09:39 2017
-This file is utilized to denote different layers, there are conv_layer, conv_layer_enc, max_pool, up_sampling
-@author: s161488
-"""
 import numpy as np
 import tensorflow as tf
 import math
 
 
-def max_pool(inputs, name):
+def max_pool(input_layer, name):
     with tf.variable_scope(name) as scope:
-        value, index = tf.nn.max_pool_with_argmax(tf.to_double(inputs), ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],
-                                                  padding='SAME', name=scope.name)
-    return tf.to_float(value), index, inputs.get_shape().as_list()
-    # here value is the max value, index is the corresponding index, the detail information is here
-    # https://www.tensorflow.org/versions/r1.0/api_docs/python/tf/nn/max_pool_with_argmax
+        output, argmax_indices = tf.nn.max_pool_with_argmax(tf.to_double(input_layer), ksize=[1, 2, 2, 1],
+                                                            strides=[1, 2, 2, 1], padding='SAME', name=scope.name)
+    return tf.to_float(output), argmax_indices, input_layer.get_shape().as_list()
 
 
 def conv_layer(input_layer, name, shape, is_training):
@@ -27,7 +20,7 @@ def conv_layer(input_layer, name, shape, is_training):
     """
     with tf.variable_scope(name) as scope:
         filter = variable_with_weight_decay('weights', initializer=initialization(shape[0], shape[2]),
-                                          shape=shape, wd=False)
+                                            shape=shape, wd=False)
         tf.summary.histogram(scope.name + "weight", filter)
         conv = tf.nn.conv2d(input_layer, filter, [1, 1, 1, 1], padding='SAME')
         conv_biases = variable_with_weight_decay('biases', initializer=tf.constant_initializer(0.0),
